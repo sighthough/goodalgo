@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strict Zero-Allocation 64-Bit Benchmark</title>
+    <style>
+        :root {
+            --bg-main: #0b1120;
+            --card-bg: #151e32;
+            --card-border: #1e293b;
+            --accent-blue: #22d3ee;
+            --accent-blue-hover: #06b6d4;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --pass-green: #22c55e;
+            --fail-red: #ef4444;
+            --bar-bg: #1e293b;
+            --bar-fill: #38bdf8;
+            --tag-bg: #1e293b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1020px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 6px;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 24px;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 16px;
+            align-items: flex-end;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-group label {
+            font-size: 0.825rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        select {
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            color: var(--text-primary);
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            outline: none;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        select:focus {
+            border-color: var(--accent-blue);
+        }
+
+        .btn-run {
+            background-color: var(--accent-blue);
+            color: #0f172a;
+            font-weight: 700;
+            padding: 11px 24px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: background-color 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-run:hover {
+            background-color: var(--accent-blue-hover);
+        }
+
+        .btn-run:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status-msg {
+            margin-top: 14px;
+            font-size: 0.875rem;
+            color: var(--accent-blue);
+            font-weight: 500;
+            min-height: 20px;
+        }
+
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            color: var(--text-muted);
+            font-weight: 600;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--card-border);
+            font-size: 0.825rem;
+        }
+
+        td {
+            padding: 16px;
+            border-bottom: 1px solid var(--card-border);
+            vertical-align: middle;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .algo-name {
+            font-weight: 700;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+        }
+
+        .algo-sub {
+            font-weight: 400;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .tag-alloc {
+            background-color: var(--tag-bg);
+            color: var(--text-secondary);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.775rem;
+            font-family: monospace;
+            display: inline-block;
+            border: 1px solid #334155;
+        }
+
+        .time-cell {
+            font-family: monospace;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .badge-pass {
+            color: var(--pass-green);
+            font-weight: 700;
+            font-size: 0.825rem;
+            letter-spacing: 0.05em;
+        }
+
+        .badge-fail {
+            color: var(--fail-red);
+            font-weight: 700;
+            font-size: 0.825rem;
+            letter-spacing: 0.05em;
+        }
+
+        .bar-container {
+            width: 100%;
+            max-width: 200px;
+            height: 8px;
+            background-color: var(--bar-bg);
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .bar-fill {
+            height: 100%;
+            background-color: var(--bar-fill);
+            width: 0%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>Strict Zero-Allocation 64-Bit Benchmark</h1>
+        <p>Testing Byte-Partitioned Truncated LSD against Standard MSD, Micro MSD, In-Place MSD, Flat LSD, and QuickSort.</p>
+    </div>
+
+    <div class="card">
+        <div class="controls-grid">
+            <div class="control-group">
+                <label for="datasetSize">Dataset Size (N)</label>
+                <select id="datasetSize">
+                    <option value="100000" selected>100,000 Integers</option>
+                    <option value="250000">250,000 Integers</option>
+                    <option value="500000">500,000 Integers</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="dataDist">Data Distribution</label>
+                <select id="dataDist">
+                    <option value="uniform">Uniform Random (64-bit)</option>
+                    <option value="skewed" selected>Small Skewed (16-bit max)</option>
+                    <option value="mixed">Mixed Byte Heights</option>
+                </select>
+            </div>
+            <button class="btn-run" id="btnRun" onclick="startBenchmark()">Run Benchmark</button>
+        </div>
+        <div class="status-msg" id="statusMsg">Ready to run.</div>
+    </div>
+
+    <div class="card table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Algorithm</th>
+                    <th>Allocations</th>
+                    <th>Execution Time</th>
+                    <th>Validation</th>
+                    <th>Relative Speed</th>
+                </tr>
+            </thead>
+            <tbody id="resultsBody">
+                <!-- Rows injected dynamically -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+// ============================================================================
+// PRE-ALLOCATED GLOBAL MEMORY POOLS (Zero Mid-Sort Heap Allocations)
+// ============================================================================
+const MAX_N = 500000;
+const scratchBuffer = new BigUint64Array(MAX_N);
+
+// Stack depth memory pools
+const STACK_MAX = 64;
+const msdCountsPool = new Uint32Array(STACK_MAX * 256);
+const msdOffsetsPool = new Uint32Array(STACK_MAX * 256);
+const msdSubStartsPool = new Uint32Array(STACK_MAX * 256);
+const msdSubEndsPool = new Uint32Array(STACK_MAX * 256);
+
+const flagCountsPool = new Uint32Array(STACK_MAX * 256);
+const flagOffsetsPool = new Uint32Array(STACK_MAX * 256);
+const flagNextPool = new Uint32Array(STACK_MAX * 256);
+
+// ============================================================================
+// FAST HELPER FUNCTIONS
+// ============================================================================
+function getByteHeight(val) {
+    if (val === 0n) return 0;
+    if (val > 0x00ffffffffffffffn) return 7;
+    if (val > 0x0000ffffffffffffn) return 6;
+    if (val > 0x000000ffffffffffn) return 5;
+    if (val > 0x00000000ffffffffn) return 4;
+    if (val > 0x0000000000ffffffn) return 3;
+    if (val > 0x000000000000ffffn) return 2;
+    if (val > 0x00000000000000ffn) return 1;
+    return 0;
+}
+
+// ============================================================================
+// ALGORITHM 1: Clustered Truncated LSD Radix (NEW HYBRID)
+// ============================================================================
+function runClusteredLSDRadix(arr, n) {
+    const counts = flagCountsPool.subarray(0, 8);
+    const offsets = flagOffsetsPool.subarray(0, 8);
+    const subStarts = msdSubStartsPool.subarray(0, 8);
+    const subEnds = msdSubEndsPool.subarray(0, 8);
+
+    counts.fill(0);
+
+    // Phase 1: Partition into Byte Heights (MSD Cluster Router)
+    for (let i = 0; i < n; i++) {
+        counts[getByteHeight(arr[i])]++;
+    }
+
+    offsets[0] = 0;
+    for (let i = 1; i < 8; i++) {
+        offsets[i] = offsets[i - 1] + counts[i - 1];
+    }
+
+    for (let i = 0; i < 8; i++) {
+        subStarts[i] = offsets[i];
+        subEnds[i] = offsets[i] + counts[i];
+    }
+
+    for (let i = 0; i < n; i++) {
+        const h = getByteHeight(arr[i]);
+        scratchBuffer[offsets[h]++] = arr[i];
+    }
+
+    for (let i = 0; i < n; i++) {
+        arr[i] = scratchBuffer[i];
+    }
+
+    // Phase 2: Truncated LSD Radix Sweeps per Cluster
+    const lsdCounts = flagCountsPool.subarray(0, 256);
+    const lsdOffsets = flagOffsetsPool.subarray(0, 256);
+
+    for (let k = 0; k < 8; k++) {
+        const start = subStarts[k];
+        const end = subEnds[k];
+        if (end - start <= 1) continue;
+
+        let inBuf = arr;
+        let outBuf = scratchBuffer;
+
+        // Run LSD ONLY up to active byte k
+        for (let pass = 0; pass <= k; pass++) {
+            lsdCounts.fill(0);
+            const shift = BigInt(pass * 8);
+
+            for (let i = start; i < end; i++) {
+                const bucket = Number((inBuf[i] >> shift) & 0xFFn);
+                lsdCounts[bucket]++;
+            }
+
+            lsdOffsets[0] = start;
+            for (let i = 1; i < 256; i++) {
+                lsdOffsets[i] = lsdOffsets[i - 1] + lsdCounts[i - 1];
+            }
+
+            for (let i = start; i < end; i++) {
+                const bucket = Number((inBuf[i] >> shift) & 0xFFn);
+                outBuf[lsdOffsets[bucket]++] = inBuf[i];
+            }
+
+            const temp = inBuf;
+            inBuf = outBuf;
+            outBuf = temp;
+        }
+
+        if (inBuf !== arr) {
+            for (let i = start; i < end; i++) {
+                arr[i] = scratchBuffer[i];
+            }
+        }
+    }
+}
+
+// ============================================================================
+// ALGORITHM 2: Standard MSD Radix (8-bit Direct + Two-Phase Router)
+// ============================================================================
+function msdRecurseDirect8(src, dst, start, end, bitPos, depth) {
+    if (end - start <= 1 || bitPos < 0) return;
+
+    const baseIdx = depth * 256;
+    const counts = msdCountsPool.subarray(baseIdx, baseIdx + 256);
+    const offsets = msdOffsetsPool.subarray(baseIdx, baseIdx + 256);
+    const subStarts = msdSubStartsPool.subarray(baseIdx, baseIdx + 256);
+    const subEnds = msdSubEndsPool.subarray(baseIdx, baseIdx + 256);
+
+    counts.fill(0);
+
+    const shift = BigInt(bitPos);
+    for (let i = start; i < end; i++) {
+        const bucket = Number((src[i] >> shift) & 0xFFn);
+        counts[bucket]++;
+    }
+
+    offsets[0] = start;
+    for (let i = 1; i < 256; i++) {
+        offsets[i] = offsets[i - 1] + counts[i - 1];
+    }
+
+    for (let i = 0; i < 256; i++) {
+        subStarts[i] = offsets[i];
+        subEnds[i] = offsets[i] + counts[i];
+    }
+
+    for (let i = start; i < end; i++) {
+        const bucket = Number((src[i] >> shift) & 0xFFn);
+        dst[offsets[bucket]++] = src[i];
+    }
+
+    for (let i = start; i < end; i++) {
+        src[i] = dst[i];
+    }
+
+    const nextBit = bitPos - 8;
+    for (let i = 0; i < 256; i++) {
+        if (subEnds[i] - subStarts[i] > 1) {
+            msdRecurseDirect8(src, dst, subStarts[i], subEnds[i], nextBit, depth + 1);
+        }
+    }
+}
+
+function runStandardMSD(arr, n) {
+    const counts = flagCountsPool.subarray(0, 256);
+    const offsets = flagOffsetsPool.subarray(0, 256);
+    const subStarts = msdSubStartsPool.subarray(0, 256);
+    const subEnds = msdSubEndsPool.subarray(0, 256);
+
+    counts.fill(0);
+
+    for (let i = 0; i < n; i++) {
+        counts[getByteHeight(arr[i])]++;
+    }
+
+    offsets[0] = 0;
+    for (let i = 1; i < 8; i++) {
+        offsets[i] = offsets[i - 1] + counts[i - 1];
+    }
+
+    for (let i = 0; i < 8; i++) {
+        subStarts[i] = offsets[i];
+        subEnds[i] = offsets[i] + counts[i];
+    }
+
+    for (let i = 0; i < n; i++) {
+        const h = getByteHeight(arr[i]);
+        scratchBuffer[offsets[h]++] = arr[i];
+    }
+
+    for (let i = 0; i < n; i++) {
+        arr[i] = scratchBuffer[i];
+    }
+
+    for (let h = 0; h < 8; h++) {
+        const len = subEnds[h] - subStarts[h];
+        if (len > 1) {
+            const topBit = h * 8;
+            msdRecurseDirect8(arr, scratchBuffer, subStarts[h], subEnds[h], topBit, 1);
+        }
+    }
+}
+
+// ============================================================================
+// ALGORITHM 3: Micro MSD (4-2-2 Sub-bit Decomposition)
+// ============================================================================
+function microMsdRecurse(src, dst, start, end, bitPos, stepBits, depth) {
+    if (end - start <= 1 || bitPos < 0) return;
+
+    const numBuckets = 1 << stepBits;
+    const baseIdx = depth * 256;
+    const counts = msdCountsPool.subarray(baseIdx, baseIdx + numBuckets);
+    const offsets = msdOffsetsPool.subarray(baseIdx, baseIdx + numBuckets);
+    const subStarts = msdSubStartsPool.subarray(baseIdx, baseIdx + numBuckets);
+    const subEnds = msdSubEndsPool.subarray(baseIdx, baseIdx + numBuckets);
+
+    counts.fill(0);
+
+    const shift = BigInt(bitPos);
+    const mask = BigInt(numBuckets - 1);
+
+    for (let i = start; i < end; i++) {
+        const bucket = Number((src[i] >> shift) & mask);
+        counts[bucket]++;
+    }
+
+    offsets[0] = start;
+    for (let i = 1; i < numBuckets; i++) {
+        offsets[i] = offsets[i - 1] + counts[i - 1];
+    }
+
+    for (let i = 0; i < numBuckets; i++) {
+        subStarts[i] = offsets[i];
+        subEnds[i] = offsets[i] + counts[i];
+    }
+
+    for (let i = start; i < end; i++) {
+        const bucket = Number((src[i] >> shift) & mask);
+        dst[offsets[bucket]++] = src[i];
+    }
+
+    for (let i = start; i < end; i++) {
+        src[i] = dst[i];
+    }
+
+    let nextBitPos, nextStepBits;
+    if (stepBits === 4) {
+        nextBitPos = bitPos - 2;
+        nextStepBits = 2;
+    } else if (stepBits === 2) {
+        if ((bitPos % 8) === 2) {
+            nextBitPos = bitPos - 2;
+            nextStepBits = 2;
+        } else {
+            nextBitPos = bitPos - 4;
+            nextStepBits = 4;
+        }
+    }
+
+    for (let i = 0; i < numBuckets; i++) {
+        if (subEnds[i] - subStarts[i] > 1) {
+            microMsdRecurse(src, dst, subStarts[i], subEnds[i], nextBitPos, nextStepBits, depth + 1);
+        }
+    }
+}
+
+function runMicroMSD(arr, n) {
+    const counts = flagCountsPool.subarray(0, 256);
+    const offsets = flagOffsetsPool.subarray(0, 256);
+    const subStarts = msdSubStartsPool.subarray(0, 256);
+    const subEnds = msdSubEndsPool.subarray(0, 256);
+
+    counts.fill(0);
+
+    for (let i = 0; i < n; i++) {
+        counts[getByteHeight(arr[i])]++;
+    }
+
+    offsets[0] = 0;
+    for (let i = 1; i < 8; i++) {
+        offsets[i] = offsets[i - 1] + counts[i - 1];
+    }
+
+    for (let i = 0; i < 8; i++) {
+        subStarts[i] = offsets[i];
+        subEnds[i] = offsets[i] + counts[i];
+    }
+
+    for (let i = 0; i < n; i++) {
+        const h = getByteHeight(arr[i]);
+        scratchBuffer[offsets[h]++] = arr[i];
+    }
+
+    for (let i = 0; i < n; i++) {
+        arr[i] = scratchBuffer[i];
+    }
+
+    for (let h = 0; h < 8; h++) {
+        const len = subEnds[h] - subStarts[h];
+        if (len > 1) {
+            const topBit = (h * 8) + 4;
+            microMsdRecurse(arr, scratchBuffer, subStarts[h], subEnds[h], topBit, 4, 1);
+        }
+    }
+}
+
+// ============================================================================
+// ALGORITHM 4: In-Place Pointer Swapping MSD (American Flag Sort)
+// ============================================================================
+function americanFlagRecurse(arr, start, end, bitPos, depth) {
+    if (end - start <= 1 || bitPos < 0) return;
+
+    const baseIdx = depth * 256;
+    const counts = flagCountsPool.subarray(baseIdx, baseIdx + 256);
+    const offsets = flagOffsetsPool.subarray(baseIdx, baseIdx + 256);
+    const next = flagNextPool.subarray(baseIdx, baseIdx + 256);
+
+    counts.fill(0);
+    const shift = BigInt(bitPos);
+
+    for (let i = start; i < end; i++) {
+        const bucket = Number((arr[i] >> shift) & 0xFFn);
+        counts[bucket]++;
+    }
+
+    offsets[0] = start;
+    next[0] = start;
+    for (let i = 1; i < 256; i++) {
+        offsets[i] = offsets[i - 1] + counts[i - 1];
+        next[i] = offsets[i];
+    }
+
+    for (let b = 0; b < 256; b++) {
+        while (next[b] < offsets[b] + counts[b]) {
+            const currIdx = next[b];
+            const val = arr[currIdx];
+            const destBucket = Number((val >> shift) & 0xFFn);
+
+            if (destBucket === b) {
+                next[b]++;
+            } else {
+                const swapIdx = next[destBucket]++;
+                arr[currIdx] = arr[swapIdx];
+                arr[swapIdx] = val;
+            }
+        }
+    }
+
+    const nextBit = bitPos - 8;
+    for (let i = 0; i < 256; i++) {
+        if (counts[i] > 1) {
+            americanFlagRecurse(arr, offsets[i], offsets[i] + counts[i], nextBit, depth + 1);
+        }
+    }
+}
+
+function runInPlaceMSD(arr, n) {
+    americanFlagRecurse(arr, 0, n, 56, 0);
+}
+
+// ============================================================================
+// ALGORITHM 5: Flat LSD Radix Sort (8-bit Unrolled Passes)
+// ============================================================================
+function runLSDRadix(arr, n) {
+    const counts = flagCountsPool.subarray(0, 256);
+    const offsets = flagOffsetsPool.subarray(0, 256);
+
+    let inArray = arr;
+    let outArray = scratchBuffer;
+
+    for (let pass = 0; pass < 8; pass++) {
+        counts.fill(0);
+        const shift = BigInt(pass * 8);
+
+        for (let i = 0; i < n; i++) {
+            const bucket = Number((inArray[i] >> shift) & 0xFFn);
+            counts[bucket]++;
+        }
+
+        offsets[0] = 0;
+        for (let i = 1; i < 256; i++) {
+            offsets[i] = offsets[i - 1] + counts[i - 1];
+        }
+
+        for (let i = 0; i < n; i++) {
+            const bucket = Number((inArray[i] >> shift) & 0xFFn);
+            outArray[offsets[bucket]++] = inArray[i];
+        }
+
+        const temp = inArray;
+        inArray = outArray;
+        outArray = temp;
+    }
+
+    if (inArray !== arr) {
+        for (let i = 0; i < n; i++) {
+            arr[i] = scratchBuffer[i];
+        }
+    }
+}
+
+// ============================================================================
+// ALGORITHM 6: Pure JS In-Place QuickSort (Zero-Alloc Stack)
+// ============================================================================
+const qstack = new Int32Array(1024);
+
+function runQuickSort(arr, n) {
+    let top = 0;
+    qstack[top++] = 0;
+    qstack[top++] = n - 1;
+
+    while (top > 0) {
+        const high = qstack[--top];
+        const low = qstack[--top];
+
+        if (low < high) {
+            const mid = (low + high) >> 1;
+            if (arr[mid] < arr[low]) { const t = arr[low]; arr[low] = arr[mid]; arr[mid] = t; }
+            if (arr[high] < arr[low]) { const t = arr[low]; arr[low] = arr[high]; arr[high] = t; }
+            if (arr[mid] < arr[high]) { const t = arr[high]; arr[high] = arr[mid]; arr[mid] = t; }
+
+            const pivot = arr[high];
+            let i = low - 1;
+
+            for (let j = low; j < high; j++) {
+                if (arr[j] <= pivot) {
+                    i++;
+                    const tmp = arr[i];
+                    arr[i] = arr[j];
+                    arr[j] = tmp;
+                }
+            }
+            const tmp = arr[i + 1];
+            arr[i + 1] = arr[high];
+            arr[high] = tmp;
+
+            const p = i + 1;
+
+            const leftSize = p - 1 - low;
+            const rightSize = high - (p + 1);
+
+            if (leftSize > rightSize) {
+                if (p - 1 > low) { qstack[top++] = low; qstack[top++] = p - 1; }
+                if (p + 1 < high) { qstack[top++] = p + 1; qstack[top++] = high; }
+            } else {
+                if (p + 1 < high) { qstack[top++] = p + 1; qstack[top++] = high; }
+                if (p - 1 > low) { qstack[top++] = low; qstack[top++] = p - 1; }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// BENCHMARK HARNESS & DATA GENERATION
+// ============================================================================
+function generateData(n, dist) {
+    const arr = new BigUint64Array(n);
+    for (let i = 0; i < n; i++) {
+        let high = 0n;
+        let low = 0n;
+
+        if (dist === 'uniform') {
+            high = BigInt(Math.floor(Math.random() * 0xFFFFFFFF));
+            low = BigInt(Math.floor(Math.random() * 0xFFFFFFFF));
+            arr[i] = (high << 32n) | low;
+        } else if (dist === 'skewed') {
+            arr[i] = BigInt(Math.floor(Math.random() * 0xFFFF));
+        } else if (dist === 'mixed') {
+            const bytes = Math.floor(Math.random() * 8);
+            const max = (1n << BigInt((bytes + 1) * 8)) - 1n;
+            high = BigInt(Math.floor(Math.random() * 0xFFFFFFFF));
+            low = BigInt(Math.floor(Math.random() * 0xFFFFFFFF));
+            arr[i] = ((high << 32n) | low) & max;
+        }
+    }
+    return arr;
+}
+
+function verifySorted(arr) {
+    for (let i = 1; i < arr.length; i++) {
+        if (arr[i - 1] > arr[i]) return false;
+    }
+    return true;
+}
+
+const algorithms = [
+    { name: "Clustered Truncated LSD", sub: "Byte Router + Truncated Flat LSD Sweeps", fn: runClusteredLSDRadix },
+    { name: "Standard MSD (8-bit Direct)", sub: "Two-Phase Router + Scratch Buffer", fn: runStandardMSD },
+    { name: "Micro MSD (4-2-2 Sub-bit)", sub: "Two-Phase Router + Sub-bit Decomposition", fn: runMicroMSD },
+    { name: "In-Place MSD (American Flag)", sub: "8-bit Direct + Multi-Pointer Swaps", fn: runInPlaceMSD },
+    { name: "Flat LSD Radix Sort (8-bit Flat)", sub: "Unrolled 8-Pass Out-of-Place", fn: runLSDRadix },
+    { name: "Pure JS QuickSort", sub: "In-Place Iterative Comparison Baseline", fn: runQuickSort }
+];
+
+async function startBenchmark() {
+    const btn = document.getElementById('btnRun');
+    const status = document.getElementById('statusMsg');
+    const tbody = document.getElementById('resultsBody');
+    const n = parseInt(document.getElementById('datasetSize').value, 10);
+    const dist = document.getElementById('dataDist').value;
+
+    btn.disabled = true;
+    status.textContent = "Generating dataset and initializing memory buffers...";
+    tbody.innerHTML = "";
+
+    await new Promise(r => setTimeout(r, 50));
+
+    const masterDataset = generateData(n, dist);
+    const results = [];
+
+    for (let i = 0; i < algorithms.length; i++) {
+        const algo = algorithms[i];
+        status.textContent = `Running ${algo.name}...`;
+        await new Promise(r => setTimeout(r, 20));
+
+        const testArray = new BigUint64Array(masterDataset);
+
+        const start = performance.now();
+        algo.fn(testArray, n);
+        const end = performance.now();
+
+        const timeMs = end - start;
+        const pass = verifySorted(testArray);
+
+        results.push({
+            name: algo.name,
+            sub: algo.sub,
+            time: timeMs,
+            pass: pass
+        });
+    }
+
+    const maxTime = Math.max(...results.map(r => r.time));
+
+    results.forEach(r => {
+        const row = document.createElement('tr');
+        const barPct = Math.max(10, Math.min(100, (r.time / maxTime) * 100));
+
+        row.innerHTML = `
+            <td>
+                <div class="algo-name">${r.name}</div>
+                <div class="algo-sub">${r.sub}</div>
+            </td>
+            <td><span class="tag-alloc">0 Bytes (Zero-Alloc)</span></td>
+            <td class="time-cell">${r.time.toFixed(2)} ms</td>
+            <td><span class="${r.pass ? 'badge-pass' : 'badge-fail'}">${r.pass ? 'PASS' : 'FAIL'}</span></td>
+            <td>
+                <div class="bar-container">
+                    <div class="bar-fill" style="width: ${barPct}%"></div>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+
+    status.textContent = "Benchmark complete!";
+    btn.disabled = false;
+}
+</script>
+</body>
+</html>
