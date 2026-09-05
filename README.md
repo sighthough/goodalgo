@@ -6,4 +6,4 @@ its good
 
 rip anything you want from the html
 
-👉 **[test here](https://sighthough.github.io/goodalgo.html/)**
+👉 **[test here](https://sighthough.github.io/goodalgo/)**
